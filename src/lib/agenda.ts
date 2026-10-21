@@ -3,8 +3,27 @@ import type { Config, Item, Plano, Registro, Slot } from './schema';
 
 const HORIZONTE_DIAS = 60;
 
-function chaveAncora(item: Item): string {
+/** Grupo de horários do remédio: '8', '12' ou '24' (o de 48 h segue o de 24 h). */
+export function chaveGrupo(item: Item): string {
   return String(item.intervaloHoras >= 24 ? 24 : item.intervaloHoras);
+}
+
+export const GRUPOS = [
+  { chave: '8', n: 3, titulo: 'A cada 8 horas' },
+  { chave: '12', n: 2, titulo: 'A cada 12 horas' },
+  { chave: '24', n: 1, titulo: 'A cada 24 e 48 horas' },
+] as const;
+
+/** n horários igualmente espaçados a partir de "HH:MM" (ex.: 07:00, 3 → 07:00, 15:00, 23:00), na ordem do dia. */
+export function espacar(primeiro: string, n: number): string[] {
+  return horariosAutomaticos(`0000-00-00T${primeiro}`, n) ?? [];
+}
+
+/** Horários do grupo: os escolhidos à mão ou os automáticos a partir da primeira dose. */
+export function horariosDoGrupo(chave: string, n: number, cfg: Config): string[] | null {
+  const base = cfg.ancoras[chave];
+  if (base && base.length === n && base.every(Boolean)) return [...base].sort();
+  return horariosAutomaticos(cfg.inicio, n);
 }
 
 export function dosesPorDia(item: Item): number {
@@ -26,9 +45,7 @@ export function horariosDoItem(item: Item, cfg: Config): string[] | null {
   const n = dosesPorDia(item);
   const proprio = cfg.horariosItem[item.id];
   if (proprio && proprio.length === n && proprio.every(Boolean)) return [...proprio].sort();
-  const base = cfg.ancoras[chaveAncora(item)];
-  if (base && base.length === n && base.every(Boolean)) return [...base].sort();
-  return horariosAutomaticos(cfg.inicio, n);
+  return horariosDoGrupo(chaveGrupo(item), n, cfg);
 }
 
 /** Só para estimar datas enquanto não há horários: doses igualmente espaçadas. */
