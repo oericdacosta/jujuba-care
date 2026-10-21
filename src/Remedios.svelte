@@ -70,7 +70,7 @@
 
           {#if !item.condicional}
             <div class="stack">
-              <p class="muted">Horários deste remédio {estado.config.horariosItem[item.id] ? '(personalizados)' : horariosDoItem(item, estado.config) ? '(padrão do intervalo)' : '(não definidos)'}</p>
+              <p class="muted">Horários deste remédio {estado.config.horariosItem[item.id] ? '(personalizados)' : horariosDoItem(item, estado.config) ? '(automático)' : '(não definidos)'}</p>
               <Horarios
                 n={dosesPorDia(item)}
                 valores={horariosDoItem(item, estado.config) ?? []}

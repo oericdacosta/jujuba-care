@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agendaDoDia, resolver } from './agenda';
+import { agendaDoDia, horariosAutomaticos, resolver } from './agenda';
 import { ITENS } from './seed';
 import type { Config, Item } from './schema';
 
@@ -53,12 +53,15 @@ describe('contínuos e condicionais', () => {
 });
 
 describe('sem horários escolhidos', () => {
-  it('estima datas mas não gera agenda do dia', () => {
-    const c = cfg({ ancoras: {} });
-    const planos = resolver([item('a', 24, 7)], c);
-    expect(planos.a.estimado).toBe(true);
-    expect(planos.a.fim).toBe('2026-10-27');
-    expect(agendaDoDia('2026-10-21', [item('a', 24, 7)], planos, {})).toEqual([]);
+  it('deriva os horários da primeira dose', () => {
+    const c = cfg({ ancoras: {}, inicio: '2026-10-21T06:30' });
+    expect(horariosAutomaticos(c.inicio, 3)).toEqual(['06:30', '14:30', '22:30']);
+    expect(horariosAutomaticos(c.inicio, 2)).toEqual(['06:30', '18:30']);
+    expect(horariosAutomaticos('2026-10-21T22:00', 3)).toEqual(['06:00', '14:00', '22:00']);
+    const planos = resolver([item('a', 12, 7)], c);
+    expect(planos.a.estimado).toBe(false);
+    expect(planos.a.slots[0].hora).toBe('06:30');
+    expect(planos.a.slots[1].hora).toBe('18:30');
   });
   it('sem início não calcula nada', () => {
     expect(resolver([item('a', 24, 7)], cfg({ inicio: null })).a.semInicio).toBe(true);

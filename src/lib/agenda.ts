@@ -11,14 +11,24 @@ export function dosesPorDia(item: Item): number {
   return item.intervaloHoras >= 24 ? 1 : 24 / item.intervaloHoras;
 }
 
-/** Horários escolhidos pela tutora, ou null enquanto ainda não foram definidos. */
+/** Horários automáticos: a partir da primeira dose, repete o intervalo (ex.: 8h às 06:00 → 06:00, 14:00, 22:00). */
+export function horariosAutomaticos(inicio: string | null, n: number): string[] | null {
+  if (!inicio) return null;
+  const min = Number(inicio.slice(11, 13)) * 60 + Number(inicio.slice(14, 16));
+  return Array.from({ length: n }, (_, i) => {
+    const m = (min + (i * 1440) / n) % 1440;
+    return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+  }).sort();
+}
+
+/** Horários do remédio: próprios, da âncora ajustada à mão, ou automáticos a partir da primeira dose. */
 export function horariosDoItem(item: Item, cfg: Config): string[] | null {
   const n = dosesPorDia(item);
   const proprio = cfg.horariosItem[item.id];
   if (proprio && proprio.length === n && proprio.every(Boolean)) return [...proprio].sort();
   const base = cfg.ancoras[chaveAncora(item)];
   if (base && base.length === n && base.every(Boolean)) return [...base].sort();
-  return null;
+  return horariosAutomaticos(cfg.inicio, n);
 }
 
 /** Só para estimar datas enquanto não há horários: doses igualmente espaçadas. */

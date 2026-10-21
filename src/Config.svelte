@@ -1,6 +1,7 @@
 <script lang="ts">
   import { gerarIcs, baixar } from './lib/ics';
   import Horarios from './lib/Horarios.svelte';
+  import { horariosAutomaticos } from './lib/agenda';
   import { ITENS } from './lib/seed';
   import { agoraLocal, estado, validar } from './lib/store.svelte';
 
@@ -60,16 +61,19 @@
 
   <section class="card stack">
     <h2>2. Horários</h2>
-    <p class="muted">Escolha os horários de cada frequência. Um remédio específico pode ter horário próprio na aba Remédios (por exemplo, o Sanus em jejum).</p>
+    <p class="muted">Calculados sozinhos a partir da primeira dose. Só mexa se quiser outro horário. Um remédio específico pode ter horário próprio na aba Remédios (por exemplo, o Sanus em jejum).</p>
     {#each grupos as g}
       <div class="stack">
         <strong>{g.titulo}</strong>
         <p class="muted">{usados(g.chave).join(', ')}</p>
         <Horarios
           n={g.n}
-          valores={estado.config.ancoras[g.chave] ?? []}
+          valores={estado.config.ancoras[g.chave] ?? horariosAutomaticos(estado.config.inicio, g.n) ?? []}
           aoMudar={(v) => (estado.config.ancoras[g.chave] = v)}
         />
+        {#if estado.config.ancoras[g.chave]}
+          <button class="btn ghost" onclick={() => delete estado.config.ancoras[g.chave]}>Voltar ao automático</button>
+        {/if}
       </div>
     {/each}
   </section>
