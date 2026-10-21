@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agendaDoDia, horariosAutomaticos, resolver } from './agenda';
+import { agendaDoDia, espacar, horariosAutomaticos, horariosDoItem, resolver } from './agenda';
 import { ITENS } from './seed';
 import type { Config, Item } from './schema';
 
@@ -114,5 +114,20 @@ describe('exportação .ics', () => {
     expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(6);
     expect(ics.match(/BEGIN:VALARM/g)).toHaveLength(6);
     expect(ics).toContain('UID:2026-10-21T0800@jujuba-care');
+  });
+});
+
+describe('horários por grupo', () => {
+  it('espaça a partir do primeiro horário', () => {
+    expect(espacar('07:00', 3)).toEqual(['07:00', '15:00', '23:00']);
+    expect(espacar('09:30', 2)).toEqual(['09:30', '21:30']);
+    expect(espacar('20:00', 3)).toEqual(['04:00', '12:00', '20:00']);
+  });
+  it('24 h e 48 h usam o mesmo horário do grupo; horário próprio tem prioridade', () => {
+    const c = cfg({ ancoras: { '24': ['10:00'] }, horariosItem: { sanus: ['07:00'] } });
+    const por = (id: string) => horariosDoItem(ITENS.find((i) => i.id === id)!, c);
+    expect(por('hepvet')).toEqual(['10:00']);
+    expect(por('kalium')).toEqual(['10:00']);
+    expect(por('sanus')).toEqual(['07:00']);
   });
 });
