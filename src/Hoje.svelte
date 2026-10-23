@@ -14,10 +14,6 @@
 
   const ehHoje = $derived(dia === estado.hoje);
   const doDia = $derived(agendaDoDia(dia, ITENS, estado.planos, estado.doses));
-  const faltaConfig = $derived(!estado.config.inicio);
-  const semHorario = $derived(
-    ITENS.filter((i) => !i.condicional && estado.planos[i.id]?.estimado && estado.planos[i.id].slots.length > 0),
-  );
   const resolvidas = $derived(doDia.filter((d) => d.estado !== 'pendente').length);
 
   const agoraMin = $derived(estado.agora.getHours() * 60 + estado.agora.getMinutes());
@@ -40,7 +36,7 @@
     if (dia === RETORNO) out.push({ texto: 'Hoje: retorno e repetição de exames. Leve o histórico.', tipo: '' });
     for (const i of ITENS) {
       const p = estado.planos[i.id];
-      if (!p?.inicio || p.estimado) continue;
+      if (!p?.inicio) continue;
       const enc = i.regras.find((r) => r.tipo === 'encerraQuandoInicia');
       if (enc && estado.planos[enc.item]?.inicio === dia)
         out.push({ texto: `Hoje começa a ${ITEM_POR_ID[enc.item].nome}. Suspenda o ${i.nome}.`, tipo: 'risk' });
@@ -95,21 +91,6 @@
     </div>
   </header>
 
-  {#if faltaConfig}
-    <section class="card stack">
-      <h2>Vamos começar</h2>
-      <p>Falta dizer quando foi (ou será) a primeira dose e escolher os horários. O app não preenche isso por você.</p>
-      <button class="btn primary" onclick={() => irPara('config')}>Escolher horários</button>
-    </section>
-  {:else if semHorario.length > 0}
-    <section class="banner">
-      <span aria-hidden="true">⏰</span>
-      <div class="stack">
-        <p><strong>{semHorario.length} remédios ainda sem horário</strong> e por isso não aparecem na agenda do dia.</p>
-        <button class="btn" onclick={() => irPara('config')}>Escolher horários</button>
-      </div>
-    </section>
-  {/if}
 
   {#each avisos as a}
     <div class="banner {a.tipo}"><span aria-hidden="true">{a.tipo === 'risk' ? '⚠️' : a.tipo === 'ok' ? '✔️' : '📅'}</span><p>{a.texto}</p></div>
@@ -157,9 +138,7 @@
       {/each}
     </section>
   {:else}
-    {#if !faltaConfig && semHorario.length === 0}
-      <section class="card"><p>Nenhuma dose agendada para {fmtBR(dia)}.</p></section>
-    {/if}
+    <section class="card"><p>Nenhuma dose agendada para {fmtBR(dia)}.</p></section>
   {/each}
 
   {#if ehHoje}

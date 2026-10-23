@@ -1,6 +1,5 @@
 import { addDays, fmtBR } from './dates';
-import { GRUPOS, horariosDoGrupo } from './agenda';
-import type { Config, Item, Plano } from './schema';
+import type { Item, Plano } from './schema';
 import { periodo } from './util';
 
 /** Dados do plano impresso, sem nada de desenho (dá para testar sem PDF). */
@@ -29,17 +28,21 @@ export interface LinhaChecklist {
 export interface DadosPlano {
   desde: string;
   dias: string[];
-  grupos: { titulo: string; horarios: string[]; remedios: string[] }[];
+  /** Horários fixos do dia e quantos itens cada um tem. */
+  horas: { hora: string; qtd: number }[];
   rotina: BlocoHora[];
   checklist: LinhaChecklist[];
   sos: { item: Item; dose: string; quando: string; intervalo: string }[];
   datas: { data: string; texto: string }[];
+  /** Remédios da receita que ainda não estão na rotina (ex.: telmisartana). */
+  fora: { item: Item; motivo: string }[];
 }
 
 const nomePorId = (itens: Item[], id: string) => itens.find((i) => i.id === id)?.nome ?? id;
 
 export function notasDoItem(item: Item, itens: Item[]): string {
   const n: string[] = [];
+  if (item.obs.some((o) => /primeiro remédio do dia/i.test(o))) n.push('Primeiro remédio do dia, depois do de 00:00');
   if (item.jejum === 'exigido') n.push('Em jejum');
   if (item.jejum === 'proibido') n.push('Com comida');
   if (item.intervaloHoras === 48) n.push('Dia sim, dia não');
@@ -61,7 +64,6 @@ function textoPeriodo(p: Plano): string {
 export function montarDados(
   itens: Item[],
   planos: Record<string, Plano>,
-  cfg: Config,
   desde: string,
   nDias: number,
   retorno: string | null,
@@ -71,14 +73,8 @@ export function montarDados(
 
   const ativos = itens.filter((i) => {
     const p = planos[i.id];
-    return !i.condicional && p && !p.estimado && p.slots.length > 0 && (!p.fim || p.fim >= desde);
+    return !i.condicional && p && p.slots.length > 0 && (!p.fim || p.fim >= desde);
   });
-
-  const grupos = GRUPOS.map((g) => ({
-    titulo: g.titulo,
-    horarios: horariosDoGrupo(g.chave, g.n, cfg) ?? [],
-    remedios: ativos.filter((i) => String(i.intervaloHoras >= 24 ? 24 : i.intervaloHoras) === g.chave).map((i) => i.nome),
-  })).filter((g) => g.remedios.length);
 
   // Rotina: cada horário do dia com os remédios dele.
   const porHora = new Map<string, LinhaRotina[]>();
@@ -130,5 +126,15 @@ export function montarDados(
   }
   datas.sort((a, b) => a.data.localeCompare(b.data));
 
-  return { desde, dias, grupos, rotina, checklist, sos, datas };
+  const horas = rotina.map((b) => ({ hora: b.hora, qtd: b.linhas.length }));
+  const fora = itens
+    .filter((i) => !i.condicional && !i.horarios)
+    .map((item) => ({
+      item,
+      motivo: item.regras.some((r) => r.tipo === 'inicioApos')
+        ? `Ainda não iniciado. Começa só depois de terminar: ${nomePorId(itens, item.regras.find((r) => r.tipo === 'inicioApos')!.item)}.`
+        : 'Ainda não iniciado.',
+    }));
+
+  return { desde, dias, horas, rotina, checklist, sos, datas, fora };
 }

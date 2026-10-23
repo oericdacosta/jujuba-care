@@ -21,6 +21,7 @@ Abra o link no Safari, Compartilhar, Adicionar à Tela de Início.
 
 ## Estrutura
 
-- `src/lib/seed.ts`: transcrição da receita (fonte dos dados)
-- `src/lib/agenda.ts`: geração de horários e regras (prednisolona, telmisartana, Kalium)
+- `src/lib/seed.ts`: transcrição da receita, horários fixos de cada remédio e início do tratamento (21/10/2026)
+- `src/lib/agenda.ts`: doses a partir dos horários fixos e regras (prednisolona, telmisartana, Kalium)
+- `src/lib/plano.ts` e `src/lib/pdf.ts`: plano para imprimir (PDF)
 - `src/lib/ics.ts`: exportação para o Calendário
