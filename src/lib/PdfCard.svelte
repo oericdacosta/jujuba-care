@@ -3,10 +3,11 @@
   import { cabecalhoPadrao } from './cabecalho';
   import { addDays, fmtBR } from './dates';
   import { montarDados } from './plano';
-  import { ITENS, RETORNO } from './seed';
+  import { INICIO_TRATAMENTO, ITENS, RETORNO } from './seed';
   import { estado } from './store.svelte';
 
-  let desde = $state(estado.hoje);
+  const inicio = INICIO_TRATAMENTO.slice(0, 10);
+  let desde = $state(inicio);
   let dias = $state(7);
   let gerando = $state(false);
   let erro = $state('');
@@ -29,7 +30,7 @@
     try {
       const { gerarPdf } = await import('./pdf'); // carrega o gerador só quando precisa
       const hoje = new Date();
-      const dados = montarDados(ITENS, estado.planos, estado.config, desde, dias, RETORNO);
+      const dados = montarDados(ITENS, estado.planos, desde, dias, RETORNO);
       const doc = gerarPdf(dados, cabecalhoPadrao(hoje.toLocaleDateString('pt-BR')));
       const blob = doc.output('blob');
       pdf = { url: URL.createObjectURL(blob), arquivo: new File([blob], nome, { type: 'application/pdf' }) };
@@ -54,40 +55,37 @@
 <section class="card stack">
   <h2>🖨️ Plano para imprimir (PDF)</h2>
   <p class="muted">
-    Folha com a rotina do dia por horário, os remédios "se precisar", as datas importantes e um checklist para marcar cada dose no papel.
+    Folha com os horários fixos, a rotina do dia, as datas importantes e um checklist para marcar cada dose no papel.
+    O checklist começa no início do tratamento (21/10); dá para mudar a data.
   </p>
 
-  {#if !estado.config.inicio}
-    <p class="banner">Defina a primeira dose em Ajustes antes de gerar o PDF.</p>
-  {:else}
-    <div class="row wrap">
-      <label class="stack">
-        <span class="muted">Checklist a partir de</span>
-        <input type="date" value={desde} onchange={(e) => { desde = e.currentTarget.value || estado.hoje; limpar(); }} />
-      </label>
-      <label class="stack">
-        <span class="muted">Quantos dias</span>
-        <select bind:value={dias} onchange={limpar}>
-          <option value={7}>7 dias</option>
-          <option value={14}>14 dias</option>
-        </select>
-      </label>
-    </div>
-    <p class="muted">Checklist de {fmtBR(desde)} a {fmtBR(addDays(desde, dias - 1))}.</p>
+  <div class="row wrap">
+    <label class="stack">
+      <span class="muted">Checklist a partir de</span>
+      <input type="date" value={desde} onchange={(e) => { desde = e.currentTarget.value || inicio; limpar(); }} />
+    </label>
+    <label class="stack">
+      <span class="muted">Quantos dias</span>
+      <select bind:value={dias} onchange={limpar}>
+        <option value={7}>7 dias</option>
+        <option value={14}>14 dias</option>
+      </select>
+    </label>
+  </div>
+  <p class="muted">Checklist de {fmtBR(desde)} a {fmtBR(addDays(desde, dias - 1))}.</p>
 
-    {#if !pdf}
-      <button class="btn primary" onclick={gerar} disabled={gerando}>{gerando ? 'Gerando…' : 'Gerar PDF'}</button>
-    {:else}
-      <p class="banner ok" role="status">PDF pronto. Abra para imprimir ou salvar.</p>
-      <div class="row wrap">
-        {#if podeCompartilhar(pdf.arquivo)}
-          <button class="btn primary" onclick={compartilhar}>Imprimir ou compartilhar</button>
-        {/if}
-        <a class="btn link" href={pdf.url} target="_blank" rel="noopener">Abrir PDF</a>
-        <a class="btn link" href={pdf.url} download={nome}>Baixar</a>
-      </div>
-      <button class="btn ghost" onclick={gerar}>Gerar de novo</button>
-    {/if}
+  {#if !pdf}
+    <button class="btn primary" onclick={gerar} disabled={gerando}>{gerando ? 'Gerando…' : 'Gerar PDF'}</button>
+  {:else}
+    <p class="banner ok" role="status">PDF pronto. Abra para imprimir ou salvar.</p>
+    <div class="row wrap">
+      {#if podeCompartilhar(pdf.arquivo)}
+        <button class="btn primary" onclick={compartilhar}>Imprimir ou compartilhar</button>
+      {/if}
+      <a class="btn link" href={pdf.url} target="_blank" rel="noopener">Abrir PDF</a>
+      <a class="btn link" href={pdf.url} download={nome}>Baixar</a>
+    </div>
+    <button class="btn ghost" onclick={gerar}>Gerar de novo</button>
   {/if}
   {#if erro}<p class="banner risk" role="alert">{erro}</p>{/if}
 </section>

@@ -1,71 +1,31 @@
-import { addDays, diffDays, pad } from './dates';
+import { addDays, diffDays } from './dates';
 import type { Config, Item, Plano, Registro, Slot } from './schema';
+import { INICIO_TRATAMENTO } from './seed';
 
 const HORIZONTE_DIAS = 60;
 
-/** Grupo de horários do remédio: '8', '12' ou '24' (o de 48 h segue o de 24 h). */
-export function chaveGrupo(item: Item): string {
-  return String(item.intervaloHoras >= 24 ? 24 : item.intervaloHoras);
+/** Horários fixos do remédio, em ordem do dia; null se está fora da rotina. */
+export function horariosDoItem(item: Item): string[] | null {
+  return item.horarios && item.horarios.length ? [...item.horarios].sort() : null;
 }
 
-export const GRUPOS = [
-  { chave: '8', n: 3, titulo: 'A cada 8 horas' },
-  { chave: '12', n: 2, titulo: 'A cada 12 horas' },
-  { chave: '24', n: 1, titulo: 'A cada 24 e 48 horas' },
-] as const;
-
-/** n horários igualmente espaçados a partir de "HH:MM" (ex.: 07:00, 3 → 07:00, 15:00, 23:00), na ordem do dia. */
-export function espacar(primeiro: string, n: number): string[] {
-  return horariosAutomaticos(`0000-00-00T${primeiro}`, n) ?? [];
-}
-
-/** Horários do grupo: os escolhidos à mão ou os automáticos a partir da primeira dose. */
-export function horariosDoGrupo(chave: string, n: number, cfg: Config): string[] | null {
-  const base = cfg.ancoras[chave];
-  if (base && base.length === n && base.every(Boolean)) return [...base].sort();
-  return horariosAutomaticos(cfg.inicio, n);
-}
-
-export function dosesPorDia(item: Item): number {
-  return item.intervaloHoras >= 24 ? 1 : 24 / item.intervaloHoras;
-}
-
-/** Horários automáticos: a partir da primeira dose, repete o intervalo (ex.: 8h às 06:00 → 06:00, 14:00, 22:00). */
-export function horariosAutomaticos(inicio: string | null, n: number): string[] | null {
-  if (!inicio) return null;
-  const min = Number(inicio.slice(11, 13)) * 60 + Number(inicio.slice(14, 16));
-  return Array.from({ length: n }, (_, i) => {
-    const m = (min + (i * 1440) / n) % 1440;
-    return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
-  }).sort();
-}
-
-/** Horários do remédio: próprios, da âncora ajustada à mão, ou automáticos a partir da primeira dose. */
-export function horariosDoItem(item: Item, cfg: Config): string[] | null {
-  const n = dosesPorDia(item);
-  const proprio = cfg.horariosItem[item.id];
-  if (proprio && proprio.length === n && proprio.every(Boolean)) return [...proprio].sort();
-  return horariosDoGrupo(chaveGrupo(item), n, cfg);
-}
-
-/** Só para estimar datas enquanto não há horários: doses igualmente espaçadas. */
-function horariosVirtuais(item: Item): string[] {
-  const n = dosesPorDia(item);
-  const passo = 24 / n;
-  return Array.from({ length: n }, (_, i) => `${pad(Math.floor(i * passo))}:00`);
+/** Total de doses de um tratamento com prazo: dias × doses por dia (no de 48 h, metade dos dias). */
+export function totalDeDoses(item: Item): number {
+  if (item.duracaoDias == null || !item.horarios) return Infinity;
+  return Math.round(item.duracaoDias * item.horarios.length * Math.min(1, 24 / item.intervaloHoras));
 }
 
 export function slotKey(itemId: string, data: string, hora: string): string {
   return `${itemId}|${data}T${hora}`;
 }
 
-export function resolver(itens: Item[], cfg: Config): Record<string, Plano> {
+export function resolver(itens: Item[], cfg: Config, inicio: string = INICIO_TRATAMENTO): Record<string, Plano> {
   const porId = new Map(itens.map((i) => [i.id, i]));
   const out: Record<string, Plano> = {};
   const pilha = new Set<string>();
 
-  const vazio = (itemId: string, semInicio: boolean): Plano => ({
-    itemId, inicio: null, fim: null, slots: [], estimado: false, semInicio,
+  const vazio = (itemId: string): Plano => ({
+    itemId, inicio: null, fim: null, slots: [], estimado: false, semInicio: false,
   });
 
   function obter(id: string): Plano {
@@ -80,28 +40,26 @@ export function resolver(itens: Item[], cfg: Config): Record<string, Plano> {
   }
 
   function calcular(item: Item): Plano {
-    const base = cfg.inicio;
-    if (!base) return vazio(item.id, true);
-    if (item.condicional) return vazio(item.id, false);
+    const horarios = horariosDoItem(item);
+    if (item.condicional || !horarios) return vazio(item.id);
 
-    let inicioData = base.slice(0, 10);
-    let aPartirDe: string | null = base;
+    let inicioData = inicio.slice(0, 10);
+    let aPartirDe: string | null = inicio;
     const dep = item.regras.find((r) => r.tipo === 'inicioApos');
     if (dep) {
       const fimDep = obter(dep.item).fim;
-      if (!fimDep) return vazio(item.id, false);
+      if (!fimDep) return vazio(item.id);
       inicioData = addDays(fimDep, 1);
       aPartirDe = null;
     }
 
+    // Só encerra quando o outro remédio de fato está na rotina.
     const encerra = item.regras.find((r) => r.tipo === 'encerraQuandoInicia');
     const limite = encerra ? obter(encerra.item).inicio : null;
 
-    const reais = horariosDoItem(item, cfg);
-    const horarios = reais ?? horariosVirtuais(item);
-    const total = item.duracaoDias == null ? Infinity : Math.round((item.duracaoDias * 24) / item.intervaloHoras);
+    const total = totalDeDoses(item);
     const dataMax = item.duracaoDias == null
-      ? addDays(base.slice(0, 10), HORIZONTE_DIAS)
+      ? addDays(inicio.slice(0, 10), HORIZONTE_DIAS)
       : addDays(inicioData, item.duracaoDias + 2);
     const fimManual = cfg.fimManual[item.id];
 
@@ -113,7 +71,7 @@ export function resolver(itens: Item[], cfg: Config): Record<string, Plano> {
       if (fimManual && data > fimManual) break;
       if (item.intervaloHoras === 48 && d % 2 === 1) continue;
       for (const hora of horarios) {
-        if (reais && aPartirDe && `${data}T${hora}` < aPartirDe) continue;
+        if (aPartirDe && `${data}T${hora}` < aPartirDe) continue;
         if (slots.length >= total) break;
         slots.push({ itemId: item.id, data, hora, key: slotKey(item.id, data, hora) });
       }
@@ -126,7 +84,7 @@ export function resolver(itens: Item[], cfg: Config): Record<string, Plano> {
       inicio: slots[0]?.data ?? null,
       fim: terminaSozinho && ultimo ? ultimo.data : null,
       slots,
-      estimado: !reais,
+      estimado: false,
       semInicio: false,
     };
   }
@@ -153,7 +111,7 @@ export function agendaDoDia(
   const out: DoseDoDia[] = [];
   for (const item of itens) {
     const plano = planos[item.id];
-    if (!plano || plano.estimado) continue;
+    if (!plano) continue;
     for (const slot of plano.slots) {
       if (slot.data !== data) continue;
       const registro = doses[slot.key];

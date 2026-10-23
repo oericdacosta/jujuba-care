@@ -4,8 +4,6 @@
   import { ITENS } from './lib/seed';
   import { agoraLocal, estado, validar } from './lib/store.svelte';
 
-  let { irPara }: { irPara: (aba: string) => void } = $props();
-
   let msg = $state('');
 
   function exportarBackup() {
@@ -31,7 +29,7 @@
   function exportarIcs() {
     const ics = gerarIcs(ITENS, estado.planos, estado.hoje, 14);
     if (!ics.includes('BEGIN:VEVENT')) {
-      msg = 'Escolha o início e os horários antes de exportar.';
+      msg = 'Não há doses nos próximos 14 dias.';
       return;
     }
     baixar('jujuba-lembretes.ics', ics, 'text/calendar');
@@ -45,18 +43,6 @@
 
 <div class="page">
   <h1>Ajustes</h1>
-
-  <section class="card stack">
-    <h2>1. Primeira dose</h2>
-    <p class="muted">Quando foi (ou será) a primeira dose do tratamento. As datas de término partem daqui.</p>
-    <input type="datetime-local" value={estado.config.inicio ?? ''} onchange={(e) => (estado.config.inicio = e.currentTarget.value || null)} />
-  </section>
-
-  <section class="card stack">
-    <h2>2. Horários por grupo</h2>
-    <p class="muted">Os horários são definidos por grupo (8 h, 12 h, 24 e 48 h) na aba Remédios. Todos os remédios do grupo seguem juntos.</p>
-    <button class="btn" onclick={() => irPara('remedios')}>Definir horários dos grupos</button>
-  </section>
 
   <PdfCard />
 

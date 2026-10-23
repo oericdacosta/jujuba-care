@@ -122,25 +122,28 @@ function paginaRotina(doc: jsPDF, d: DadosPlano, cab: Cabecalho) {
   caixa(doc, M + 2 * (bw + 4), y, bw, 21, 'Líquidos', [cab.liquidos, 'por dia, em média'], C.fastSoft);
   y += 30;
 
-  // Horários de cada grupo
-  y = tituloSecao(doc, y, 'Horários por grupo', 'todos os remédios do grupo são dados juntos');
-  const gw = (largura - 4 * (d.grupos.length - 1)) / d.grupos.length;
-  d.grupos.forEach((g, i) => {
-    const x = M + i * (gw + 4);
-    doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(...C.mel);
-    doc.setLineWidth(0.5);
-    doc.roundedRect(x, y, gw, 15, 2.5, 2.5, 'FD');
+  // Horários fixos do dia
+  y = tituloSecao(doc, y, 'Horários fixos do dia', 'do primeiro ao último');
+  const gap = 2;
+  const cw = (largura - gap * (d.horas.length - 1)) / d.horas.length;
+  d.horas.forEach((h, i) => {
+    const x = M + i * (cw + gap);
+    const jejum = d.rotina.find((b) => b.hora === h.hora)?.linhas.some((l) => l.item.jejum === 'exigido');
+    doc.setFillColor(...(jejum ? C.fastSoft : C.melSoft));
+    doc.setDrawColor(...(jejum ? C.fast : C.mel));
+    doc.setLineWidth(0.4);
+    doc.roundedRect(x, y, cw, 13, 2, 2, 'FD');
     doc.setLineWidth(0.2);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(...C.muted);
-    doc.text(g.titulo, x + 4, y + 5.2);
     doc.setTextColor(...C.ink);
-    doc.setFontSize(13);
-    doc.text(g.horarios.join('  ·  '), x + 4, y + 11.8);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(cw < 17 ? 9.5 : 11);
+    doc.text(h.hora, x + cw / 2, y + 6, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(...C.muted);
+    doc.text(jejum ? 'em jejum' : `${h.qtd} ${h.qtd === 1 ? 'item' : 'itens'}`, x + cw / 2, y + 10.4, { align: 'center' });
   });
-  y += 23;
+  y += 21;
 
   // Rotina do dia
   y = tituloSecao(doc, y, 'Rotina do dia', 'em ordem de horário');
@@ -151,7 +154,7 @@ function paginaRotina(doc: jsPDF, d: DadosPlano, cab: Cabecalho) {
       blocoRotina.push(k);
       corpo.push([
         ...(i === 0
-          ? [{ content: `${b.hora}\n${b.nome}`, rowSpan: b.linhas.length, styles: { fontStyle: 'bold' as const, fontSize: 10.5, halign: 'center' as const } }]
+          ? [{ content: `${b.hora}\n${b.nome}`, rowSpan: b.linhas.length, styles: { fontStyle: 'bold' as const, fontSize: 9.5, halign: 'center' as const } }]
           : []),
         l.item.nome, l.dose, l.notas, l.periodo,
       ]);
@@ -166,8 +169,8 @@ function paginaRotina(doc: jsPDF, d: DadosPlano, cab: Cabecalho) {
     rowPageBreak: 'avoid',
     styles: { ...baseTabela.styles, cellPadding: 1.9 },
     columnStyles: {
-      0: { cellWidth: 19 },
-      1: { cellWidth: 55, fontStyle: 'bold' },
+      0: { cellWidth: 24 },
+      1: { cellWidth: 52, fontStyle: 'bold' },
       2: { cellWidth: 29 },
       3: { cellWidth: 'auto', textColor: C.fast },
       4: { cellWidth: 31, textColor: C.muted, fontSize: 8 },
@@ -187,6 +190,18 @@ function paginaRotina(doc: jsPDF, d: DadosPlano, cab: Cabecalho) {
       head: [['Remédio', 'Dose', 'Quando dar', 'Intervalo']],
       body: d.sos.map((s) => [s.item.nome, s.dose, s.quando, s.intervalo]),
       columnStyles: { 0: { cellWidth: 52, fontStyle: 'bold' }, 1: { cellWidth: 30 }, 3: { cellWidth: 42, textColor: C.muted, fontSize: 8.5 } },
+    });
+    y = fimTabela(doc) + 10;
+  }
+
+  if (d.fora.length) {
+    y = tituloSecao(doc, y, 'Fora da rotina por enquanto');
+    autoTable(doc, {
+      ...baseTabela,
+      startY: y,
+      showHead: false,
+      body: d.fora.map((f) => [f.item.nome, f.item.dose?.exibir ?? '-', f.motivo]),
+      columnStyles: { 0: { cellWidth: 52, fontStyle: 'bold' }, 1: { cellWidth: 30 }, 2: { textColor: C.muted } },
     });
     y = fimTabela(doc) + 10;
   }

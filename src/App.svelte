@@ -28,7 +28,7 @@
   {:else if aba === 'remedios'}<Remedios />
   {:else if aba === 'cuidados'}<Cuidados />
   {:else if aba === 'historico'}<Historico />
-  {:else}<Config irPara={ir} />{/if}
+  {:else}<Config />{/if}
 </main>
 
 <nav aria-label="Principal">

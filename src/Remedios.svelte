@@ -1,13 +1,12 @@
 <script lang="ts">
-  import { chaveGrupo, dosesPorDia, GRUPOS, horariosDoItem } from './lib/agenda';
-  import type { Item } from './lib/schema';
-  import GrupoHorarios from './lib/GrupoHorarios.svelte';
-  import PdfCard from './lib/PdfCard.svelte';
+  import { horariosDoItem } from './lib/agenda';
   import { fmtBR } from './lib/dates';
   import Dose from './lib/Dose.svelte';
-  import Horarios from './lib/Horarios.svelte';
+  import PdfCard from './lib/PdfCard.svelte';
+  import type { Item } from './lib/schema';
   import { ITENS, ITEM_POR_ID } from './lib/seed';
   import { estado } from './lib/store.svelte';
+  import { periodo } from './lib/util';
 
   let aberto = $state<string | null>(null);
 
@@ -15,23 +14,26 @@
     const item = ITEM_POR_ID[id];
     const p = estado.planos[id];
     if (item.condicional) return { rotulo: 'se precisar', tipo: 'sos' };
-    if (!p.inicio) return { rotulo: p.semInicio ? 'sem data de início' : 'aguardando', tipo: '' };
-    const pref = p.estimado ? '≈ ' : '';
-    if (p.inicio > estado.hoje) {
-      const bloq = item.regras.some((r) => r.tipo === 'inicioApos');
-      return { rotulo: `${bloq ? '🔒 ' : ''}começa ${pref}${fmtBR(p.inicio)}`, tipo: 'late' };
-    }
+    if (!p.inicio) return { rotulo: 'ainda não iniciado', tipo: '' };
+    if (p.inicio > estado.hoje) return { rotulo: `começa ${fmtBR(p.inicio)}`, tipo: 'late' };
     if (p.fim && p.fim < estado.hoje) return { rotulo: `encerrado em ${fmtBR(p.fim)}`, tipo: '' };
-    if (p.fim) return { rotulo: `até ${pref}${fmtBR(p.fim)}`, tipo: 'ok' };
+    if (p.fim) return { rotulo: `até ${fmtBR(p.fim)}`, tipo: 'ok' };
     return { rotulo: '∞ contínuo', tipo: 'ok' };
   }
 
-  function mudarHorarios(id: string, v: string[]) {
-    if (v.every((x) => !x)) delete estado.config.horariosItem[id];
-    else estado.config.horariosItem[id] = v;
-  }
+  /** Rotina fixa: cada horário com os itens dele (só os que ainda estão em uso). */
+  const rotina = $derived.by(() => {
+    const m = new Map<string, Item[]>();
+    for (const item of ITENS) {
+      const p = estado.planos[item.id];
+      if (!p.slots.length || (p.fim && p.fim < estado.hoje)) continue;
+      for (const h of horariosDoItem(item) ?? []) m.set(h, [...(m.get(h) ?? []), item]);
+    }
+    return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
+  });
 
-  const doGrupo = (chave: string) => ITENS.filter((i) => !i.condicional && chaveGrupo(i) === chave);
+  const fixos = ITENS.filter((i) => !i.condicional && i.horarios);
+  const fora = ITENS.filter((i) => !i.condicional && !i.horarios);
   const sos = ITENS.filter((i) => i.condicional);
 
   const frequencia = (h: number) => (h === 48 ? 'a cada 48 h (dia sim, dia não)' : `a cada ${h} h`);
@@ -50,6 +52,14 @@
       </div>
       <span class="chip {s.tipo}">{s.rotulo}</span>
     </button>
+
+    {#if item.horarios}
+      <div class="row wrap">
+        {#each item.horarios as h}<span class="chip hora">⏰ {h}</span>{/each}
+        {#if item.jejum === 'exigido'}<span class="chip fast">🚫🍽 em jejum</span>{/if}
+        {#if item.jejum === 'proibido'}<span class="chip food">🍽 com comida</span>{/if}
+      </div>
+    {/if}
 
     {#if item.dose}<Dose dose={item.dose} tamanho="p" />{/if}
 
@@ -70,27 +80,13 @@
           </div>
         {/if}
 
-        {#if !item.condicional}
-          <div class="stack">
-            <p class="muted">Horário {estado.config.horariosItem[item.id] ? 'próprio deste remédio' : 'do grupo'}. Mude aqui só se este remédio precisar de um horário diferente dos outros do grupo.</p>
-            <Horarios
-              n={dosesPorDia(item)}
-              valores={horariosDoItem(item, estado.config) ?? []}
-              aoMudar={(v) => mudarHorarios(item.id, v)}
-            />
-            {#if estado.config.horariosItem[item.id]}
-              <button class="btn ghost" onclick={() => delete estado.config.horariosItem[item.id]}>Seguir o horário do grupo</button>
-            {/if}
-          </div>
-
-          {#if p.inicio}
-            {#if estado.config.fimManual[item.id]}
-              <button class="btn" onclick={() => delete estado.config.fimManual[item.id]}>Reativar tratamento</button>
-            {:else}
-              <button class="btn danger" onclick={() => confirm(`Encerrar ${item.nome} hoje? Doses depois de hoje saem da agenda.`) && (estado.config.fimManual[item.id] = estado.hoje)}>
-                Encerrar tratamento hoje
-              </button>
-            {/if}
+        {#if p.inicio}
+          {#if estado.config.fimManual[item.id]}
+            <button class="btn" onclick={() => delete estado.config.fimManual[item.id]}>Reativar tratamento</button>
+          {:else}
+            <button class="btn danger" onclick={() => confirm(`Encerrar ${item.nome} hoje? Doses depois de hoje saem da agenda.`) && (estado.config.fimManual[item.id] = estado.hoje)}>
+              Encerrar tratamento hoje
+            </button>
           {/if}
         {/if}
       </div>
@@ -100,21 +96,35 @@
 
 <div class="page">
   <h1>Remédios</h1>
-  <p class="muted">Transcrição da receita de 21/10/2026, separada por frequência. Defina o horário de cada grupo e todos os remédios dele seguem juntos.</p>
+  <p class="muted">Receita de 21/10/2026 com horários fixos. O tratamento conta a partir de 21/10.</p>
 
-  {#each GRUPOS as g (g.chave)}
-    {@const itens = doGrupo(g.chave)}
-    {#if itens.length}
-      <GrupoHorarios chave={g.chave} n={g.n} titulo={g.titulo} {itens} />
-      {#each itens as item (item.id)}{@render cartao(item)}{/each}
-    {/if}
-  {/each}
+  <section class="card stack rotina">
+    <h2>⏰ Rotina fixa do dia</h2>
+    {#each rotina as [hora, itens] (hora)}
+      <div class="linha">
+        <strong class="h">{hora}</strong>
+        <div>
+          <span class="muted">{periodo(hora).nome}</span>
+          <p>{itens.map((i) => i.nome).join(', ')}</p>
+        </div>
+      </div>
+    {/each}
+  </section>
+
+  <PdfCard />
+
+  <h2>Remédios com horário</h2>
+  {#each fixos as item (item.id)}{@render cartao(item)}{/each}
+
+  {#if fora.length}
+    <h2>Ainda não iniciados</h2>
+    <p class="muted">Fora da rotina e do PDF por enquanto.</p>
+    {#each fora as item (item.id)}{@render cartao(item)}{/each}
+  {/if}
 
   <h2>Se precisar</h2>
   <p class="muted">Não têm horário fixo: registre na aba Hoje quando der.</p>
   {#each sos as item (item.id)}{@render cartao(item)}{/each}
-
-  <PdfCard />
 </div>
 
 <style>
@@ -122,4 +132,9 @@
   .head:focus-visible { outline: 3px solid var(--fast); outline-offset: 4px; }
   .original { font-style: italic; }
   .detalhe { border-top: 1px solid var(--line); padding-top: 10px; }
+  .chip.hora { background: var(--mel-soft); color: var(--ink); }
+  .rotina { gap: 0; }
+  .rotina h2 { margin-bottom: 8px; }
+  .linha { display: grid; grid-template-columns: 64px 1fr; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .h { font-size: 1.1rem; }
 </style>

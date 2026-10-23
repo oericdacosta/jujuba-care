@@ -14,6 +14,8 @@ export interface Item {
   dose: { valor: number; exibir: string; unidade: Unidade } | null;
   /** Intervalo entre doses. Em itens condicionais, é o intervalo mínimo. */
   intervaloHoras: number;
+  /** Horários fixos do dia ('HH:MM'). null = fora da rotina (condicional ou ainda não iniciado). */
+  horarios: string[] | null;
   /** null = "até novas recomendações". */
   duracaoDias: number | null;
   /** Gatilho escrito na receita; itens condicionais não geram horários. */

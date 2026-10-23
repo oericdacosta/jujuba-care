@@ -1,6 +1,6 @@
 <script lang="ts">
   import { diffDays, fmtDiaSemana } from './lib/dates';
-  import { ITENS, RETORNO } from './lib/seed';
+  import { INICIO_TRATAMENTO, ITENS, RETORNO } from './lib/seed';
   import { estado } from './lib/store.svelte';
 
   interface Marco { data: string; texto: string; tipo: 'ini' | 'fim' | 'vet' }
@@ -21,7 +21,7 @@
       item: i, plano: estado.planos[i.id],
     })),
   );
-  const inicioGeral = $derived(estado.config.inicio?.slice(0, 10) ?? estado.hoje);
+  const inicioGeral = INICIO_TRATAMENTO.slice(0, 10);
   const fimGeral = $derived(
     tratamentos.reduce((max, t) => Math.max(max, t.plano.fim ? diffDays(inicioGeral, t.plano.fim) : 30), 30) + 1,
   );
@@ -32,39 +32,32 @@
 
 <div class="page">
   <h1>Agenda</h1>
-  {#if !estado.config.inicio}
-    <p class="card">Defina o início do tratamento em Ajustes para ver as datas.</p>
-  {:else}
-    <p class="muted">
-      Barras mostram cada tratamento; a linha vertical é hoje.
-      {#if tratamentos.some((t) => t.plano.estimado)}Com “≈”, a data é estimada: escolha os horários para confirmar.{/if}
-    </p>
+  <p class="muted">Barras mostram cada tratamento; a linha vertical é hoje.</p>
 
-    <section class="card stack">
-      <h2>Linha do tempo</h2>
-      <div class="gantt">
-        {#each tratamentos as t (t.item.id)}
-          <div class="lin">
-            <span class="nome">{t.item.nome}</span>
-            <div class="trilho">
-              <i class="barra" style="left:{pos(t.plano.inicio!)}; width:{largura(t.plano.inicio!, t.plano.fim)}" class:cont={!t.plano.fim}></i>
-              <i class="hoje" style="left:{pos(estado.hoje)}"></i>
-            </div>
+  <section class="card stack">
+    <h2>Linha do tempo</h2>
+    <div class="gantt">
+      {#each tratamentos as t (t.item.id)}
+        <div class="lin">
+          <span class="nome">{t.item.nome}</span>
+          <div class="trilho">
+            <i class="barra" style="left:{pos(t.plano.inicio!)}; width:{largura(t.plano.inicio!, t.plano.fim)}" class:cont={!t.plano.fim}></i>
+            <i class="hoje" style="left:{pos(estado.hoje)}"></i>
           </div>
-        {/each}
-      </div>
-    </section>
-
-    <section class="card stack">
-      <h2>Datas importantes</h2>
-      {#each marcos as m}
-        <div class="row marco" class:passado={m.data < estado.hoje}>
-          <span class="chip {m.tipo === 'vet' ? 'risk' : m.tipo === 'ini' ? 'food' : 'ok'}">{fmtDiaSemana(m.data)}</span>
-          <span>{m.texto}</span>
         </div>
       {/each}
-    </section>
-  {/if}
+    </div>
+  </section>
+
+  <section class="card stack">
+    <h2>Datas importantes</h2>
+    {#each marcos as m}
+      <div class="row marco" class:passado={m.data < estado.hoje}>
+        <span class="chip {m.tipo === 'vet' ? 'risk' : m.tipo === 'ini' ? 'food' : 'ok'}">{fmtDiaSemana(m.data)}</span>
+        <span>{m.texto}</span>
+      </div>
+    {/each}
+  </section>
 </div>
 
 <style>
